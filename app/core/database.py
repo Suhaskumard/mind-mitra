@@ -58,6 +58,11 @@ async def create_indexes():
         
         # Emergency contacts indexes
         await database.emergency_contacts.create_index("user_id")
+
+        # Depression flags indexes
+        await database.depression_flags.create_index("user_id")
+        await database.depression_flags.create_index([("user_id", 1), ("created_at", -1)])
+        await database.depression_flags.create_index("created_at")
         
         logger.info("Database indexes created successfully")
         

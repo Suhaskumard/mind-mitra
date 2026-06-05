@@ -193,6 +193,123 @@ class NotificationService:
             logger.error(f"Failed to send welcome email: {e}")
             return False
     
+    async def send_depression_threshold_user_email(
+        self,
+        user_email: str,
+        user_name: str,
+        flag_count: int,
+        threshold: int,
+        resources: list[str],
+    ) -> bool:
+        """Send a supportive check-in email when the depression flag threshold is reached."""
+        try:
+            subject = "MindMitra: We're here for you"
+            resources_text = "\n".join(f"- {resource}" for resource in resources)
+            resources_html = "".join(f"<li>{resource}</li>" for resource in resources)
+
+            message = f"""Hi {user_name},
+
+We've noticed you've been going through a difficult stretch lately. Over the past day, MindMitra has recorded {flag_count} moments of emotional distress — and we want you to know that support is available.
+
+You are not alone. Reaching out to someone you trust, or using the resources below, can make a real difference.
+
+Helpful resources:
+{resources_text}
+
+If you added emergency contacts in your profile, they have also been gently notified so someone who cares about you can check in.
+
+With care,
+The MindMitra Team
+"""
+
+            html_message = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <h2 style="color: #4a6fa5;">We're here for you, {user_name}</h2>
+                <p>We've noticed you've been going through a difficult stretch lately. Over the past day,
+                MindMitra has recorded <strong>{flag_count}</strong> moments of emotional distress.</p>
+                <p>You are not alone. Reaching out to someone you trust, or using the resources below,
+                can make a real difference.</p>
+                <h3 style="color: #4a6fa5;">Helpful resources</h3>
+                <ul>{resources_html}</ul>
+                <p>If you added emergency contacts in your profile, they have also been gently notified
+                so someone who cares about you can check in.</p>
+                <p>With care,<br><strong>The MindMitra Team</strong></p>
+            </body>
+            </html>
+            """
+
+            return await self.send_email(
+                to=user_email,
+                subject=subject,
+                message=message,
+                html_message=html_message,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send depression threshold user email: {e}")
+            return False
+
+    async def send_depression_threshold_contact_email(
+        self,
+        contact_email: str,
+        contact_name: str,
+        user_name: str,
+        flag_count: int,
+        threshold: int,
+        resources: list[str],
+    ) -> bool:
+        """Notify an emergency contact with a calm, supportive message."""
+        try:
+            subject = f"MindMitra: A gentle check-in about {user_name}"
+            resources_text = "\n".join(f"- {resource}" for resource in resources)
+            resources_html = "".join(f"<li>{resource}</li>" for resource in resources)
+
+            message = f"""Hi {contact_name},
+
+{user_name}, who listed you as an emergency contact on MindMitra, may be going through a difficult time.
+
+Over the past day, our system has noticed {flag_count} signs of emotional distress (threshold: {threshold}). This is an automated, supportive notification — not an emergency alert — meant to encourage a caring check-in.
+
+A simple message or call from you could mean a lot right now.
+
+Helpful resources you can share:
+{resources_text}
+
+Thank you for being someone {user_name} trusts.
+
+With care,
+The MindMitra Team
+"""
+
+            html_message = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <h2 style="color: #4a6fa5;">A gentle check-in about {user_name}</h2>
+                <p>Hi {contact_name},</p>
+                <p><strong>{user_name}</strong>, who listed you as an emergency contact on MindMitra,
+                may be going through a difficult time.</p>
+                <p>Over the past day, our system has noticed <strong>{flag_count}</strong> signs of
+                emotional distress (threshold: {threshold}). This is an automated, supportive notification —
+                not an emergency alert — meant to encourage a caring check-in.</p>
+                <p>A simple message or call from you could mean a lot right now.</p>
+                <h3 style="color: #4a6fa5;">Helpful resources you can share</h3>
+                <ul>{resources_html}</ul>
+                <p>Thank you for being someone {user_name} trusts.</p>
+                <p>With care,<br><strong>The MindMitra Team</strong></p>
+            </body>
+            </html>
+            """
+
+            return await self.send_email(
+                to=contact_email,
+                subject=subject,
+                message=message,
+                html_message=html_message,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send depression threshold contact email: {e}")
+            return False
+
     async def send_daily_reminder(self, user_email: str, user_name: str) -> bool:
         """Send daily journaling reminder"""
         try:
