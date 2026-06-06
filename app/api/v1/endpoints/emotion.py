@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
+from typing import Optional
+
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
-from typing import Optional
+from app.services.depression_flags import depression_flag_service
 
 class EmotionRequest(BaseModel):
     text: Optional[str] = None
@@ -11,6 +13,8 @@ class EmotionRequest(BaseModel):
 class EmotionResponse(BaseModel):
     emotion: str
     confidence: float
+    depression_flag_count: int = 0
+    threshold_exceeded: bool = False
 
 router = APIRouter()
 
@@ -25,48 +29,57 @@ router = APIRouter()
                 "application/json": {
                     "example": {
                         "emotion": "sad",
-                        "confidence": 0.95
+                        "confidence": 0.95,
+                        "depression_flag_count": 2,
+                        "threshold_exceeded": False
                     }
                 }
             }
         }
     }
 )
-def detect_emotion(request: EmotionRequest = Body(
-    ...,
-    examples={
-        "textExample": {
-            "summary": "Text emotion detection",
-            "value": {
-                "text": "I feel so sad and hopeless",
-                "image_base64": None
-            }
-        },
-        "imageExample": {
-            "summary": "Image emotion detection",
-            "value": {
-                "text": None,
-                "image_base64": "iVBORw0KGgoAAAANSUhE..."
+async def detect_emotion(
+    request: EmotionRequest = Body(
+        ...,
+        examples={
+            "textExample": {
+                "summary": "Text emotion detection",
+                "value": {
+                    "text": "I feel so sad and hopeless",
+                    "image_base64": None
+                }
+            },
+            "imageExample": {
+                "summary": "Image emotion detection",
+                "value": {
+                    "text": None,
+                    "image_base64": "iVBORw0KGgoAAAANSUhE..."
+                }
             }
         }
-    }
-), current_user: User = Depends(get_current_user)):
-    """Detect emotion from provided text or base64-encoded image.
-
-    Enter the follwoing paramteres while sending the request
-    text: Optional- string
-    image_base64: Optional- string
-
-    Response model: `EmotionResponse`
-    emotion: string
-    confidence: float
-
-    
-    """
-    # If image is provided, stub: always return 'happy' for demo
+    ),
+    current_user: User = Depends(get_current_user),
+):
+    """Detect emotion from provided text or base64-encoded image."""
     if request.image_base64:
-        return EmotionResponse(emotion='happy', confidence=0.92)
-    # Dummy logic for text
-    if request.text and 'sad' in request.text.lower():
-        return EmotionResponse(emotion='sad', confidence=0.95)
-    return EmotionResponse(emotion='calm', confidence=0.80) 
+        emotion = "happy"
+        confidence = 0.92
+    elif request.text and "sad" in request.text.lower():
+        emotion = "sad"
+        confidence = 0.95
+    else:
+        emotion = "calm"
+        confidence = 0.80
+
+    flag_status = await depression_flag_service.process_emotion(
+        user_id=current_user.id,
+        emotion_data={"dominant_emotion": emotion, "confidence": confidence},
+        source="emotion_api",
+    )
+
+    return EmotionResponse(
+        emotion=emotion,
+        confidence=confidence,
+        depression_flag_count=flag_status.flag_count,
+        threshold_exceeded=flag_status.threshold_exceeded,
+    )

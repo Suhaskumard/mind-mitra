@@ -59,7 +59,11 @@ class Settings(BaseSettings):
     # SOS Settings
     SOS_COOLDOWN_MINUTES: int = 30
     CRITICAL_EMOTION_THRESHOLD: float = 0.8
-    DEPRESSION_FLAG_THRESHOLD: int = 3  # Number of depressed flags in 24h
+    DEPRESSION_FLAG_THRESHOLD: int = 3
+    DEPRESSION_FLAG_WINDOW_HOURS: int = 24
+    DEPRESSION_FLAG_EMOTIONS: List[str] = [
+        "depressed", "sad", "hopeless", "anxious", "fearful", "angry"
+    ]
     
     # Logging
     LOG_LEVEL: str = "INFO"

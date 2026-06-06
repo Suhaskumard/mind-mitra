@@ -52,6 +52,7 @@ class User(BaseModel):
     role: UserRole
     is_active: bool = True
     emergency_contacts: List[EmergencyContact] = []
+    depression_threshold_notified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}
