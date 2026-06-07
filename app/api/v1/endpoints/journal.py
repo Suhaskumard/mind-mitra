@@ -1,108 +1,82 @@
-from fastapi import APIRouter, Body, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.models.journal import JournalEntry, JournalEntryCreate
-from app.api.v1.endpoints.auth import get_current_user
-
-def get_db():
-    """Stub for SQLAlchemy compatibility in pre-existing journal endpoint"""
-    yield None
-from app.models.user import User
 from typing import List
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+
+from app.api.v1.endpoints.auth import get_current_user
+from app.models.journal import JournalEntry, JournalEntryCreate, JournalEntryUpdate
+from app.models.user import User
+from app.services.cache import cache_service, journal_list_cache_key
+from app.services.journal import journal_service
 
 router = APIRouter()
 
-@router.get(
-    '/journal',
-    summary="List journal entries",
-    description="Returns a list of 'JournalEntry' models for the authenticated user.",
-    response_model=List[JournalEntry],
-    responses={
-        200: {
-            "description": "List of journal entries",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "id": 1,
-                            "user_id": 1,
-                            "mood": 7,
-                            "text": "Had a great day at work today!",
-                            "date": "2024-06-01T14:30:00Z"
-                        },
-                        {
-                            "id": 2,
-                            "user_id": 1,
-                            "mood": 5,
-                            "text": "Felt a bit stressed about deadlines",
-                            "date": "2024-05-31T21:00:00Z"
-                        }
-                    ]
-                }
-            }
-        }
-    }
-)
-def get_journal_entries(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Retrieve journal entries for the authenticated user.
-    No paramteres to be manually entered to send request
 
-    Response model: List['JournalEntry']
-    """
-    return db.query(JournalEntry).filter(JournalEntry.user_id == current_user.id).order_by(JournalEntry.date.desc()).all()
+@router.get(
+    "/journal",
+    summary="List journal entries",
+    description="Returns journal entries for the authenticated user. "
+    "Responses include an `X-Cache` header (`HIT` or `MISS`) indicating "
+    "whether the data was served from Redis.",
+    response_model=List[JournalEntry],
+)
+async def get_journal_entries(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve journal entries for the authenticated user."""
+    # Peek at the cache to determine hit/miss before the service call
+    cache_key = journal_list_cache_key(current_user.id)
+    cached = await cache_service.get_json(cache_key)
+    if cached is not None:
+        response.headers["X-Cache"] = "HIT"
+        return [JournalEntry(**item) for item in cached]
+
+    entries = await journal_service.list_entries(current_user.id)
+    response.headers["X-Cache"] = "MISS"
+    return entries
+
 
 @router.post(
-    '/journal',
+    "/journal",
     summary="Create a journal entry",
     response_model=JournalEntry,
-    responses={
-        200: {
-            "description": "New journal entry created",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "id": 3,
-                        "user_id": 1,
-                        "mood": 8,
-                        "text": "Today was amazing! I accomplished all my goals and felt very productive.",
-                        "date": "2024-06-02T18:45:00Z"
-                    }
-                }
-            }
-        }
-    }
+    status_code=status.HTTP_201_CREATED,
 )
-def create_journal_entry(entry: JournalEntryCreate = Body(
-    ...,
-    examples={
-        "example1": {
-            "summary": "Create a journal entry",
-            "value": {
-                "mood": 8,
-                "text": "Today was amazing! I accomplished all my goals and felt very productive.",
-                "date": "2024-06-02T18:45:00Z"
-            }
-        },
-        "example2": {
-            "summary": "Create a journal entry with current time",
-            "value": {
-                "mood": 6,
-                "text": "Had a challenging day but learned something new.",
-                "date": None
-            }
-        }
-    }
-), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Create a new journal entry for the authenticated user.
+async def create_journal_entry(
+    entry: JournalEntryCreate = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a new journal entry for the authenticated user."""
+    return await journal_service.create_entry(current_user.id, entry)
 
-     Enter the below paramters to send request
-    mood: int
-    text: string
-    date: Optional[datetime]
 
-    Response model: 'JournalEntry' 
-    """
-    db_entry = JournalEntry(**entry.dict(), user_id=current_user.id)
-    db.add(db_entry)
-    db.commit()
-    db.refresh(db_entry)
-    return db_entry 
+@router.put(
+    "/journal/{entry_id}",
+    summary="Update a journal entry",
+    response_model=JournalEntry,
+)
+async def update_journal_entry(
+    entry_id: str,
+    entry: JournalEntryUpdate = Body(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Update an existing journal entry for the authenticated user."""
+    updated = await journal_service.update_entry(current_user.id, entry_id, entry)
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Journal entry not found")
+    return updated
+
+
+@router.delete(
+    "/journal/{entry_id}",
+    summary="Delete a journal entry",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_journal_entry(
+    entry_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a journal entry for the authenticated user."""
+    deleted = await journal_service.delete_entry(current_user.id, entry_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Journal entry not found")

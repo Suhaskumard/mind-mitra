@@ -9,7 +9,8 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, close_db
+from app.core.redis import init_redis, close_redis, ping_redis
 from app.api.v1.api import api_router
 from app.core.logging import setup_logging
 from app.core.middleware import RequestLoggingMiddleware
@@ -31,6 +32,10 @@ tags_metadata = [
     {
         "name": "journal",
         "description": "Journal management endpoints. These routes are protected and require authentication."
+    },
+    {
+        "name": "stats",
+        "description": "Mood history and analytics endpoints. These routes are protected and require authentication."
     }
 ]
 
@@ -43,9 +48,10 @@ async def lifespan(app: FastAPI):
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     (Path(settings.UPLOAD_DIR) / "profile_pictures").mkdir(parents=True, exist_ok=True)
     await init_db()
+    await init_redis()
     yield
-    # Shutdown
-    # Cleanup resources if needed
+    await close_redis()
+    await close_db()
 
 
 app = FastAPI(
@@ -96,10 +102,12 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    redis_ok = await ping_redis()
     return {
         "status": "healthy",
         "service": "mindmitra-backend",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "redis": "connected" if redis_ok else "unavailable",
     }
 
 
