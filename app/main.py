@@ -36,7 +36,15 @@ tags_metadata = [
     {
         "name": "stats",
         "description": "Mood history and analytics endpoints. These routes are protected and require authentication."
-    }
+    },
+    {
+        "name": "sos",
+        "description": "SOS emergency alert endpoints. Trigger alerts, check cooldown status, and view alert history."
+    },
+    {
+        "name": "user",
+        "description": "User management endpoints. Manage emergency contacts and profile settings."
+    },
 ]
 
 
